@@ -28,8 +28,14 @@ if ($name === "" || $phone === "") {
     exit();
 }
 
-$fromEmail = "site@мувп-муфты.рф";
 $toEmail = "n-crator@mail.ru";
+$fromEmail = $toEmail;
+
+$host = preg_replace("/:\d+$/", "", (string) ($_SERVER["HTTP_HOST"] ?? ""));
+if ($host !== "" && filter_var("noreply@" . $host, FILTER_VALIDATE_EMAIL)) {
+    $fromEmail = "noreply@" . $host;
+}
+$fromName = "МУВП Муфты";
 $subject = "Сообщение с лендинга: Муфты МУВП и МУВПТ";
 
 $plainText = implode("\n", [
@@ -60,36 +66,41 @@ $htmlMessage =
 
 $boundary = "=_krator_" . bin2hex(random_bytes(8));
 $encodedSubject = "=?UTF-8?B?" . base64_encode($subject) . "?=";
+$encodedFromName = "=?UTF-8?B?" . base64_encode($fromName) . "?=";
 
 $headers = [];
 $headers[] = "MIME-Version: 1.0";
-$headers[] = "From: Насос-Кратор <" . $fromEmail . ">";
+$headers[] = "From: " . $encodedFromName . " <" . $fromEmail . ">";
 $headers[] = "Reply-To: " . $fromEmail;
+$headers[] = "X-Mailer: PHP/" . PHP_VERSION;
 $headers[] =
     'Content-Type: multipart/alternative; boundary="' . $boundary . '"';
 
 $message = "";
 $message .= "--" . $boundary . "\r\n";
-$message .= "Content-Type: text/plain; charset=UTF-8" . "\r\n";
-$message .= "Content-Transfer-Encoding: base64" . "\r\n\r\n";
+$message .= "Content-Type: text/plain; charset=UTF-8\r\n";
+$message .= "Content-Transfer-Encoding: base64\r\n\r\n";
 $message .= chunk_split(base64_encode($plainText));
 $message .= "--" . $boundary . "\r\n";
-$message .= "Content-Type: text/html; charset=UTF-8" . "\r\n";
-$message .= "Content-Transfer-Encoding: base64" . "\r\n\r\n";
+$message .= "Content-Type: text/html; charset=UTF-8\r\n";
+$message .= "Content-Transfer-Encoding: base64\r\n\r\n";
 $message .= chunk_split(base64_encode($htmlMessage));
-$message .= "--" . $boundary . "--" . "\r\n";
+$message .= "--" . $boundary . "--\r\n";
 
-$ok = mail($toEmail, $encodedSubject, $message, implode("\r\n", $headers));
+$ok = mail(
+    $toEmail,
+    $encodedSubject,
+    $message,
+    implode("\r\n", $headers),
+    "-f" . $fromEmail,
+);
 
 if ($ok) {
     echo json_encode(["ok" => true], JSON_UNESCAPED_UNICODE);
 } else {
     http_response_code(500);
     echo json_encode(
-        [
-            "ok" => false,
-            "error" => "mail() вернул false",
-        ],
+        ["ok" => false, "error" => "mail() вернул false"],
         JSON_UNESCAPED_UNICODE,
     );
 }
