@@ -1,130 +1,95 @@
 <?php
 declare(strict_types=1);
 
-header('Content-Type: application/json; charset=utf-8');
+header("Content-Type: application/json; charset=utf-8");
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     http_response_code(405);
-    echo json_encode(['ok' => false, 'error' => 'Method not allowed'], JSON_UNESCAPED_UNICODE);
-    exit;
+    echo json_encode(
+        ["ok" => false, "error" => "Method not allowed"],
+        JSON_UNESCAPED_UNICODE,
+    );
+    exit();
 }
 
-$rawBody = file_get_contents('php://input');
-$payload = json_decode($rawBody ?: '{}', true);
+$rawBody = file_get_contents("php://input");
+$payload = json_decode($rawBody ?: "{}", true);
 
-$name = trim((string)($payload['name'] ?? ''));
-$phone = trim((string)($payload['phone'] ?? ''));
-$comment = trim((string)($payload['comment'] ?? ''));
+$name = trim((string) ($payload["name"] ?? ""));
+$phone = trim((string) ($payload["phone"] ?? ""));
+$comment = trim((string) ($payload["comment"] ?? ""));
 
-if ($name === '' || $phone === '') {
+if ($name === "" || $phone === "") {
     http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => 'Имя и телефон обязательны'], JSON_UNESCAPED_UNICODE);
-    exit;
+    echo json_encode(
+        ["ok" => false, "error" => "Имя и телефон обязательны"],
+        JSON_UNESCAPED_UNICODE,
+    );
+    exit();
 }
 
-$smtpHost = 'skvmrelay.netangels.ru';
-$smtpPort = 25;
-$smtpHelo = 'localhost';
-$fromEmail = 'n-crator@mail.ru';
-$toEmail = 'n-crator@mail.ru';
+$fromEmail = "site@мувп-муфты.рф";
+$toEmail = "n-crator@mail.ru";
+$subject = "Сообщение с лендинга: Муфты МУВП и МУВПТ";
 
-$subject = 'Сообщение с лендинга: Муфты МУВП и МУВПТ';
 $plainText = implode("\n", [
-    'Новое сообщение с лендинга',
-    '',
-    'Имя: ' . $name,
-    'Телефон: ' . $phone,
-    'Сообщение: ' . ($comment !== '' ? $comment : '-'),
+    "Новое сообщение с лендинга",
+    "",
+    "Имя: " . $name,
+    "Телефон: " . $phone,
+    "Сообщение: " . ($comment !== "" ? $comment : "-"),
 ]);
 
-$htmlMessage = '<h2>Новое сообщение с лендинга</h2>'
-    . '<p><strong>Имя:</strong> ' . htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>'
-    . '<p><strong>Телефон:</strong> ' . htmlspecialchars($phone, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</p>'
-    . '<p><strong>Сообщение:</strong><br>' . nl2br(htmlspecialchars($comment !== '' ? $comment : '-', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')) . '</p>';
+$htmlMessage =
+    "<h2>Новое сообщение с лендинга</h2>" .
+    "<p><strong>Имя:</strong> " .
+    htmlspecialchars($name, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8") .
+    "</p>" .
+    "<p><strong>Телефон:</strong> " .
+    htmlspecialchars($phone, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8") .
+    "</p>" .
+    "<p><strong>Сообщение:</strong><br>" .
+    nl2br(
+        htmlspecialchars(
+            $comment !== "" ? $comment : "-",
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            "UTF-8",
+        ),
+    ) .
+    "</p>";
 
-$boundary = '=_krator_' . bin2hex(random_bytes(8));
-$encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';
+$boundary = "=_krator_" . bin2hex(random_bytes(8));
+$encodedSubject = "=?UTF-8?B?" . base64_encode($subject) . "?=";
 
-$message = '';
-$message .= 'From: Насос-Кратор <' . $fromEmail . '>' . "\r\n";
-$message .= 'To: <' . $toEmail . '>' . "\r\n";
-$message .= 'Subject: ' . $encodedSubject . "\r\n";
-$message .= 'MIME-Version: 1.0' . "\r\n";
-$message .= 'Content-Type: multipart/alternative; boundary="' . $boundary . '"' . "\r\n";
-$message .= "\r\n";
-$message .= '--' . $boundary . "\r\n";
-$message .= 'Content-Type: text/plain; charset=UTF-8' . "\r\n";
-$message .= 'Content-Transfer-Encoding: base64' . "\r\n\r\n";
+$headers = [];
+$headers[] = "MIME-Version: 1.0";
+$headers[] = "From: Насос-Кратор <" . $fromEmail . ">";
+$headers[] = "Reply-To: " . $fromEmail;
+$headers[] =
+    'Content-Type: multipart/alternative; boundary="' . $boundary . '"';
+
+$message = "";
+$message .= "--" . $boundary . "\r\n";
+$message .= "Content-Type: text/plain; charset=UTF-8" . "\r\n";
+$message .= "Content-Transfer-Encoding: base64" . "\r\n\r\n";
 $message .= chunk_split(base64_encode($plainText));
-$message .= '--' . $boundary . "\r\n";
-$message .= 'Content-Type: text/html; charset=UTF-8' . "\r\n";
-$message .= 'Content-Transfer-Encoding: base64' . "\r\n\r\n";
+$message .= "--" . $boundary . "\r\n";
+$message .= "Content-Type: text/html; charset=UTF-8" . "\r\n";
+$message .= "Content-Transfer-Encoding: base64" . "\r\n\r\n";
 $message .= chunk_split(base64_encode($htmlMessage));
-$message .= '--' . $boundary . '--' . "\r\n";
+$message .= "--" . $boundary . "--" . "\r\n";
 
-function smtpRead($socket): string
-{
-    $response = '';
+$ok = mail($toEmail, $encodedSubject, $message, implode("\r\n", $headers));
 
-    while (($line = fgets($socket, 515)) !== false) {
-        $response .= $line;
-        if (strlen($line) < 4 || $line[3] !== '-') {
-            break;
-        }
-    }
-
-    return $response;
-}
-
-function smtpExpect($socket, array $validCodes): string
-{
-    $response = smtpRead($socket);
-    $code = (int)substr($response, 0, 3);
-
-    if (!in_array($code, $validCodes, true)) {
-        throw new RuntimeException(trim($response) !== '' ? trim($response) : 'SMTP error');
-    }
-
-    return $response;
-}
-
-function smtpWrite($socket, string $command): void
-{
-    fwrite($socket, $command . "\r\n");
-}
-
-try {
-    $socket = fsockopen($smtpHost, $smtpPort, $errno, $errstr, 15);
-
-    if ($socket === false) {
-        throw new RuntimeException('Не удалось подключиться к SMTP: ' . $errstr . ' (' . $errno . ')');
-    }
-
-    stream_set_timeout($socket, 15);
-
-    smtpExpect($socket, [220]);
-    smtpWrite($socket, 'HELO ' . $smtpHelo);
-    smtpExpect($socket, [250]);
-    smtpWrite($socket, 'MAIL FROM:<' . $fromEmail . '>');
-    smtpExpect($socket, [250]);
-    smtpWrite($socket, 'RCPT TO:<' . $toEmail . '>');
-    smtpExpect($socket, [250, 251]);
-    smtpWrite($socket, 'DATA');
-    smtpExpect($socket, [354]);
-    fwrite($socket, $message . "\r\n.\r\n");
-    smtpExpect($socket, [250]);
-    smtpWrite($socket, 'QUIT');
-    fclose($socket);
-
-    echo json_encode(['ok' => true], JSON_UNESCAPED_UNICODE);
-} catch (Throwable $exception) {
-    if (isset($socket) && is_resource($socket)) {
-        fclose($socket);
-    }
-
+if ($ok) {
+    echo json_encode(["ok" => true], JSON_UNESCAPED_UNICODE);
+} else {
     http_response_code(500);
-    echo json_encode([
-        'ok' => false,
-        'error' => $exception->getMessage(),
-    ], JSON_UNESCAPED_UNICODE);
+    echo json_encode(
+        [
+            "ok" => false,
+            "error" => "mail() вернул false",
+        ],
+        JSON_UNESCAPED_UNICODE,
+    );
 }
